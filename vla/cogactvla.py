@@ -14,7 +14,6 @@ import torch
 import torch.nn as nn
 import numpy as np
 from PIL import Image
-from torch.distributed.fsdp.wrap import _module_wrap_policy, _or_policy
 from torch.nn.utils.rnn import pad_sequence
 from transformers.modeling_outputs import CausalLMOutputWithPast
 from transformers import LlamaTokenizerFast
@@ -36,6 +35,12 @@ overwatch = initialize_overwatch(__name__)
 
 # HuggingFace Default / LLaMa-2 IGNORE_INDEX (for labels)
 IGNORE_INDEX = -100
+
+try:
+    from torch.distributed.fsdp.wrap import _module_wrap_policy, _or_policy
+except (ImportError, ModuleNotFoundError):
+    _module_wrap_policy = None
+    _or_policy = None
 
 
 class CogACT(nn.Module):
@@ -158,6 +163,9 @@ class CogACT(nn.Module):
 
     def get_fsdp_wrapping_policy(self) -> Callable:
         """Return an FSDP _or_policy over the policies returned by each individual backbone (and our VLM policy)."""
+        if _module_wrap_policy is None or _or_policy is None:
+            raise RuntimeError("FSDP wrapping policy is unavailable because torch.distributed.fsdp is not installed.")
+
         vision_fsdp_wrapping_policy = self.vlm.vision_backbone.get_fsdp_wrapping_policy()
         llm_fsdp_wrapping_policy = self.vlm.llm_backbone.get_fsdp_wrapping_policy()
 
